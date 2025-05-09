@@ -9,6 +9,8 @@ class SymbolPriorityBuffer:
     조건을 만족하면 flush하여 dispatcher_callback을 호출한다.
     """
 
+    VALID_PRIORITIES = {"top", "mid", "bottom"}
+
     def __init__(self, dispatcher_callback, threshold=2, timeout=10):
         self.buffer = defaultdict(list)
         self.threshold = threshold
@@ -19,27 +21,26 @@ class SymbolPriorityBuffer:
         """
         버퍼에 새 메시지를 추가
         """
+        if priority not in self.VALID_PRIORITIES:
+            print(f"[❌ 잘못된 priority] {priority} → 무시됨")
+            return
+
         now = datetime.now()
         self.buffer[priority].append((symbol, score, now))
 
     def check_and_flush(self) -> dict:
-        """
-        조건을 만족한 심볼 그룹을 찾아 flush하고 큐로 push
-        반환 형태: { "top": ["TSLA", "NVDA"], "mid": [...], ... }
-        """
         now = datetime.now()
         flushed = {}
 
         for priority, items in list(self.buffer.items()):
             if not items:
-                continue  # ✅ 빈 항목 방지 (IndexError 대비)
+                continue
 
-            # 조건: 개수 ≥ threshold 또는 시간 초과
             if len(items) >= self.threshold or (now - items[0][2]) >= timedelta(seconds=self.timeout):
                 flushed[priority] = [sym for sym, _, _ in items]
 
-                # dispatcher_callback 호출
                 for sym, score, _ in items:
+                    print(f"[🚨 dispatcher_callback 호출 직전] priority={priority}, symbol={sym}, score={score}")
                     self.dispatcher_callback(priority, score, {'symbol': sym, 'score': score})
 
                 self.buffer[priority].clear()

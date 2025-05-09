@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import pymysql  # ensure it's installed
+from sqlalchemy.orm import Session
 
 MYSQL_USER = "root"
 MYSQL_PASSWORD = "1234"
@@ -25,3 +26,11 @@ def get_db_connection():
         port=MYSQL_PORT,
         database=MYSQL_DB,
     )
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

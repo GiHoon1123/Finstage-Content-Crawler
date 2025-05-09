@@ -1,8 +1,6 @@
 from sqlalchemy import Column, BigInteger, String, Text, DateTime, Boolean
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
-
-Base = declarative_base()
+from app.models.base import Base
 
 class Content(Base):
     __tablename__ = "contents"
