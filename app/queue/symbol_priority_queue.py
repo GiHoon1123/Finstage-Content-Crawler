@@ -13,7 +13,7 @@ class SymbolPriorityQueueManager:
         }
         self.priority_mapping = {
             'top': 1,
-            'middle': 2,
+            'mid': 2,
             'bottom': 3
         }
         self.counter = itertools.count()
