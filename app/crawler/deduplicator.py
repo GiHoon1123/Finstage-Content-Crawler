@@ -1,9 +1,10 @@
 # app/crawler/deduplicator.py
 
 import hashlib
-import re
 from urllib.parse import urlparse
-from app.database.connection import get_db_connection
+from sqlalchemy import select
+from app.models.content import Content
+from app.models.content_url import ContentUrl
 
 # ✅ 미래에 사용할 수 있는 허용 도메인 목록 (현재는 무시)
 ALLOWED_DOMAINS = [
@@ -11,7 +12,7 @@ ALLOWED_DOMAINS = [
     "www.reuters.com",
     "www.cnbc.com",
     "edition.cnn.com",
-    "finance.yahoo.com",  # ← 야후 파이낸스 추가
+    "finance.yahoo.com",
 ]
 
 # ❌ 다운로드하지 않을 확장자 목록
@@ -30,7 +31,7 @@ def is_valid_url(url: str) -> bool:
     if any(url.lower().endswith(ext) for ext in BLOCKED_EXTENSIONS):
         return False
 
-    # 향후 적용할 도메인 필터 (현재는 주석 처리)
+    # 향후 도메인 제한용 (사용 안함)
     # if parsed.netloc not in ALLOWED_DOMAINS:
     #     return False
 
@@ -42,38 +43,32 @@ def get_content_hash(content: str) -> str:
     """
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-def is_duplicate_hash(content_hash: str) -> bool:
+def is_duplicate_hash(session, content_hash: str) -> bool:
     """
-    동일한 해시가 이미 존재하는지 확인
+    동일한 콘텐츠 해시가 DB에 존재하는지 확인
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM contents WHERE content_hash = %s LIMIT 1", (content_hash,))
-    result = cursor.fetchone()
-    conn.close()
+    result = session.execute(
+        select(Content).where(Content.content_hash == content_hash)
+    ).scalar_one_or_none()
     return result is not None
 
-def is_duplicate_url(url: str) -> bool:
+def is_duplicate_url(session, url: str) -> bool:
     """
-    이미 동일한 URL이 저장돼 있는지 확인
+    동일한 URL이 이미 저장돼 있는지 확인
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM contents WHERE url = %s LIMIT 1", (url,))
-    result = cursor.fetchone()
-    conn.close()
+    result = session.execute(
+        select(ContentUrl).where(ContentUrl.url == url)
+    ).scalar_one_or_none()
     return result is not None
 
-def filter_and_deduplicate(urls: list[str]) -> list[str]:
+def filter_and_deduplicate(session, urls: list[str]) -> list[str]:
     """
     URL 리스트 중:
-    - 확장자 기반 유효성 검사
-    - 중복 URL 제거
-
-    콘텐츠 해시는 본문 다운로드 이후 확인하므로 여기서는 URL만 필터링
+    - 유효한 URL인지 검사
+    - 이미 저장된 URL이면 제외
     """
     filtered = []
     for url in urls:
-        if is_valid_url(url) and not is_duplicate_url(url):
+        if is_valid_url(url) and not is_duplicate_url(session, url):
             filtered.append(url)
     return filtered

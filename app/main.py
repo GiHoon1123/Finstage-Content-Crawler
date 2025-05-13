@@ -1,15 +1,17 @@
+# ✅ 교체된 버전 (thread-safe)
+
 from fastapi import FastAPI
-from app.database.connection import engine
 from app.models.base import Base
-from app.kafka.consumer import KafkaSymbolConsumer
-from app.queue.url_priority_queue import UrlPriorityQueueManager
-from app.worker.worker_pool import WorkerPool
-from app.queue.url_priority_dispatcher import UrlQueueDispatcher
-from app.queue.symbol_priority_queue import SymbolPriorityQueueManager
-from app.priority.symbol_priority_buffer import SymbolPriorityBuffer
-from app.queue.symbol_priority_dispatcher import SymbolPriorityDispatcher
+from app.database.connection import engine
+from sqlalchemy.orm import sessionmaker
+from app.routes import content_router  
+from app.kafka.kafka_simple_consumer import KafkaSimpleConsumer
+from app.ranking.symbol_priority_classifier import SymbolPriorityClassifier
+from app.queue.symbol_to_url_router import SymbolToUrlQueueRouter
+from app.worker.content_worker_pool import ContentWorkerPool
+
+from queue import Queue  # ✅ 교체 포인트: thread-safe queue 사용
 import threading
-import time
 
 app = FastAPI(
     title="Finstage Content Crawler",
@@ -17,44 +19,67 @@ app = FastAPI(
     description="우선순위 기반 기업 뉴스 콘텐츠 크롤링 서버"
 )
 
-# ✅ 서버 실행 시 테이블 자동 생성
+app.include_router(content_router.router)
+
+# ✅ 테이블 자동 생성
 Base.metadata.create_all(bind=engine)
 
-# 전역 큐 및 버퍼 객체
-url_queue = UrlPriorityQueueManager()
-worker_pool = WorkerPool(max_workers=10)
-symbol_queue = SymbolPriorityQueueManager()
+# ✅ 큐 구성 (thread-safe)
+symbol_queue_top = Queue()
+symbol_queue_mid = Queue()
+symbol_queue_bot = Queue()
 
+url_queue_top = Queue()
+url_queue_mid = Queue()
+url_queue_bot = Queue()
 
-def push_to_symbol_queue(priority: str, score: int, data: dict):
-    symbol_queue._push(priority, score, data)
+# ✅ 심볼 분류기 (점수 기반으로 우선순위 큐에 배정)
+symbol_classifier = SymbolPriorityClassifier(
+    queue_top=symbol_queue_top,
+    queue_mid=symbol_queue_mid,
+    queue_bot=symbol_queue_bot,
+    use_threadsafe_queue=True
+)
 
-symbol_buffer = SymbolPriorityBuffer(dispatcher_callback=push_to_symbol_queue)
+# ✅ URL 라우터 (심볼 큐 → bfs → URL 큐)
+symbol_router = SymbolToUrlQueueRouter(
+    symbol_queue_top=symbol_queue_top,
+    symbol_queue_mid=symbol_queue_mid,
+    symbol_queue_bot=symbol_queue_bot,
+    url_queue_top=url_queue_top,
+    url_queue_mid=url_queue_mid,
+    url_queue_bot=url_queue_bot,
+    use_threadsafe_queue=True
+)
 
-
-def run_symbol_dispatcher():
-    """
-    SymbolPriorityDispatcher를 별도 스레드 없이 주기적으로 실행
-    """
-    dispatcher = SymbolPriorityDispatcher(symbol_buffer, url_queue)
-    while True:
-        dispatcher.start()
-        time.sleep(1)
-
+# ✅ 워커 풀 (URL 큐 → HTML 수집 → DB 저장)
+SessionFactory = sessionmaker(bind=engine)
+content_worker_pool = ContentWorkerPool(
+    db_session_factory=SessionFactory,
+    url_queue_top=url_queue_top,
+    url_queue_mid=url_queue_mid,
+    url_queue_bot=url_queue_bot,
+    use_threadsafe_queue=True
+)
 
 @app.on_event("startup")
 def startup_event():
-    print("🚀 크롤링 시스템 초기화 중...")
+    print("\U0001F680 크롤링 시스템 초기화 시작...")
 
-    # URL 큐 디스패처 시작
-    url_dispatcher = UrlQueueDispatcher(url_queue, worker_pool)
-    url_dispatcher.start()
+    # 1. 전면 큐 라우터 실행
+    threading.Thread(target=symbol_router.start, daemon=True).start()
 
-    # Symbol → URL 디스패처 실행 (별도 스레드로 flush 루프만 돌림)
-    threading.Thread(target=run_symbol_dispatcher, daemon=True).start()
+    # 2. 워커 풀 실행
+    content_worker_pool.start()
 
-    # Kafka Consumer 시작
-    consumer = KafkaSymbolConsumer(symbol_buffer)
+    # 3. Kafka Consumer 실행 (classifier만 넘김)
+    consumer = KafkaSimpleConsumer(symbol_classifier)
     consumer.start()
 
-    print("✅ 백그라운드 Kafka consumer 및 dispatcher 구동 완료.")
+    print("✅ Kafka consumer + 라우터 + 워커 실행 완료")
+
+
+@app.get("/health", tags=["Health"])
+def health():
+    return {"status": "ok", "message": "Finstage Crawler is running"}
+
