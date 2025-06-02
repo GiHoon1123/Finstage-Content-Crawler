@@ -64,10 +64,10 @@ Built as a modular, thread-safe, and event-driven pipeline, this crawler service
 
 ## REST API Endpoints
 
-| Method | Endpoint         | Description                       |
-| ------ | ---------------- | --------------------------------- |
-| GET    | `/contents`      | Paginated list of saved articles  |
-| GET    | `/contents/{id}` | Retrieve a specific article by ID |
+| Method | Endpoint             | Description                           |
+| ------ | -------------------- | ------------------------------------- |
+| GET    | `/contents`          | Paginated list of saved articles      |
+| GET    | `/contents/{symbol}` | Retrieve a specific article by symbol |
 
 > API documentation available at: `http://localhost:8082/docs`
 
