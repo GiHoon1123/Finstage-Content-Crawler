@@ -1,5 +1,4 @@
-# ✅ 교체된 버전 (thread-safe)
-
+# uvicorn app.main:app --host 0.0.0.0 --port 8082 -- reload
 from fastapi import FastAPI
 from app.models.base import Base
 from app.database.connection import engine
@@ -64,7 +63,7 @@ content_worker_pool = ContentWorkerPool(
 
 @app.on_event("startup")
 def startup_event():
-    print("\U0001F680 크롤링 시스템 초기화 시작...")
+    print("크롤링 시스템 초기화 시작...")
 
     # 1. 전면 큐 라우터 실행
     threading.Thread(target=symbol_router.start, daemon=True).start()

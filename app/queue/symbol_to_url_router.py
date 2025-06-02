@@ -64,7 +64,7 @@ class SymbolToUrlQueueRouter:
                     break
 
             if not processed:
-                print("[⏳ 대기] 모든 심볼 큐가 비어 있음")
+                # print("[⏳ 대기] 모든 심볼 큐가 비어 있음")
                 time.sleep(1)
 
     def _process(self, priority: str) -> bool:
