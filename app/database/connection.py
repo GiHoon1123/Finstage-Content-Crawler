@@ -11,11 +11,11 @@ MYSQL_DB = "finstage_content_crawler"
 
 DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
 
-# ✅ SQLAlchemy ORM 엔진 & 세션 팩토리
+# SQLAlchemy ORM 엔진 & 세션 팩토리
 engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# ✅ FastAPI 의존성 주입용
+# FastAPI 의존성 주입용
 def get_db():
     db = SessionLocal()
     try:
