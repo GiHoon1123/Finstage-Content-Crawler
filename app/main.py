@@ -1,4 +1,4 @@
-# uvicorn app.main:app --host 0.0.0.0 --port 8082 -- reload
+# uvicorn app.main:app --host 0.0.0.0 --port 8082 --reload
 from fastapi import FastAPI
 from app.models.base import Base
 from app.database.connection import engine
